@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import '../components/my_textfield.dart';
 import '../services/auth/auth_service.dart';
 
-class ChatPage extends StatelessWidget {
+class ChatPage extends StatefulWidget {
   final String receiverEmail;
   final String receiverID;
 
@@ -16,6 +16,11 @@ class ChatPage extends StatelessWidget {
     required this.receiverID,
   });
 
+  @override
+  State<ChatPage> createState() => _ChatPageState();
+}
+
+class _ChatPageState extends State<ChatPage> {
   // text controller
   final TextEditingController _messageController = TextEditingController();
 
@@ -23,16 +28,64 @@ class ChatPage extends StatelessWidget {
   final ChatService _chatService = ChatService();
   final AuthService _authService = AuthService();
 
+  // for textfield focus
+  FocusNode myFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+
+    //add listener to focus node
+    myFocusNode.addListener(() {
+      if (myFocusNode.hasFocus) {
+        //cause a delay so that keyboard has time to show up
+        // then the amount of remaining space will be calculated,
+        // then scroll down
+        Future.delayed(
+          const Duration(milliseconds: 500),
+            () => scrollDown(),
+        );
+      }
+    });
+
+    // wait a bit for listview to be built, then scroll to bottom
+    Future.delayed(
+      const Duration(milliseconds: 500),
+        () =>scrollDown(),
+    );
+  }
+
+  @override
+  void dispose() {
+    // TODO: implement dispose
+    myFocusNode.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
   // send message
   void sendMessage() async {
     //if there is something inside the textfield
     if (_messageController.text.isNotEmpty) {
       // send the message
-      await _chatService.sendMessage(receiverID, _messageController.text);
+      await _chatService.sendMessage(widget.receiverID, _messageController.text);
 
       //clear text controller
       _messageController.clear();
     }
+
+    scrollDown();
+  }
+
+  // scroll controller
+  final ScrollController _scrollController = ScrollController();
+  void scrollDown() {
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(seconds: 1),
+      curve: Curves.fastOutSlowIn,
+    );
   }
 
   @override
@@ -40,7 +93,7 @@ class ChatPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
-        title: Text(receiverEmail),
+        title: Text(widget.receiverEmail),
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.grey,
         elevation: 0,
@@ -63,7 +116,7 @@ class ChatPage extends StatelessWidget {
 Widget _buildMessageList() {
     String senderID = _authService.getCurrentUser()!.uid;
     return StreamBuilder(
-      stream: _chatService.getMessages(receiverID, senderID),
+      stream: _chatService.getMessages(widget.receiverID, senderID),
       builder: (context,snapshot) {
         // erroes
         if (snapshot.hasError) {
@@ -77,6 +130,7 @@ Widget _buildMessageList() {
 
         // return list view
         return ListView(
+          controller: _scrollController,
           children:
             snapshot.data!.docs.map((doc) => _buildMessageItem(doc)).toList(),
         );
@@ -121,6 +175,7 @@ Widget _buildMessageList() {
               controller: _messageController,
               hintText: "type a message",
               obscureText: false,
+              focusNode: myFocusNode,
             ),
           ),
 
